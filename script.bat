@@ -35,12 +35,9 @@ for %%I in ("%libDirectory%\*.jar") do (
 rem Compiler tous les fichiers Java en une seule commande avec les bibliothèques nécessaires
 javac -cp "%classpath%" -d "%destinationDirectory%" !javaFiles!
 
-pause 
-
 rem Creation du fichier jar
 echo Creation du jar
-jar cvf frontcontroller.jar -C "%destinationDirectory%" .
-echo Fichier jar cree avec succes : frontcontroller.jar
+jar cvf sprint.jar -C "%destinationDirectory%" .
+echo Fichier jar cree avec succes : sprint.jar
 
 pause
-
