@@ -8,6 +8,6 @@ import java.lang.annotation.Target;
 // Définition de l'annotation
 @Retention(RetentionPolicy.RUNTIME) // Annotation disponible au moment de l'exécution
 @Target(ElementType.TYPE) // Annotation applicable aux types (classes, interfaces, etc.)
-public @interface AnnotationController {
+public @interface Controller {
     
 }
