@@ -85,7 +85,21 @@ public class FrontController extends HttpServlet {
             Mapping mapping = urlMapping.get(relativeUri);
             
             message += "Classe:"+mapping.getClassName()+ "<br/>";
-            message += "Methode:"+mapping.getMethodName();
+            message += "Methode:"+mapping.getMethodName()+ "<br/>";
+            // Charger la classe
+            Class<?> clazz = Class.forName(mapping.getClassName());
+            
+            // Créer une instance de la classe
+            Object instance = clazz.getDeclaredConstructor().newInstance();
+            
+            // Obtenir la méthode
+            Method method = clazz.getDeclaredMethod(mapping.getMethodName());
+            
+            // Exécuter la méthode et obtenir le résultat
+            String result = (String) method.invoke(instance);
+            
+            // Ajouter le résultat de la méthode au message
+            message += "Resultat de la methode: " + result + "<br/>";
         }
         else{
             message += "Aucun Mapping associe";
