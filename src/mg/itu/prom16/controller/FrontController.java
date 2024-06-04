@@ -13,6 +13,7 @@ import java.util.List;
 import javax.servlet.*;
 import javax.servlet.http.*;
 import mg.itu.prom16.util.Mapping;
+import mg.itu.prom16.util.ModelView;
 import mg.itu.prom16.annotations.Get;
 
 public class FrontController extends HttpServlet {
@@ -96,10 +97,27 @@ public class FrontController extends HttpServlet {
             Method method = clazz.getDeclaredMethod(mapping.getMethodName());
             
             // Exécuter la méthode et obtenir le résultat
-            String result = (String) method.invoke(instance);
-            
-            // Ajouter le résultat de la méthode au message
-            message += "Resultat de la methode: " + result + "<br/>";
+            Object result = method.invoke(instance);
+
+            if (result instanceof String) {
+                // Si le résultat est une String, l'ajouter directement au message
+                message += "Resultat de la methode: " + result + "<br/>";
+            } else if (result instanceof ModelView) {
+                ModelView mv = (ModelView) result;
+                // Récupérer l'URL et dispatcher les données vers cet URL
+                String destinationUrl = mv.getUrl();
+                HashMap<String, Object> data = mv.getData();
+
+                for (String key : data.keySet()) {
+                    request.setAttribute(key, data.get(key));
+                }
+
+                RequestDispatcher dispatcher = request.getRequestDispatcher(destinationUrl);
+                dispatcher.forward(request, response);
+                return;
+            } else {
+                message += "Type de retour non reconnu<br/>";
+            }
         }
         else{
             message += "Aucun Mapping associe";
