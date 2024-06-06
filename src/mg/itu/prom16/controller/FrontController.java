@@ -18,14 +18,29 @@ import mg.itu.prom16.annotations.Get;
 
 public class FrontController extends HttpServlet {
     HashMap<String,Mapping> urlMapping = new HashMap<>();
+    String errorMessage = null;
 
     public void init() throws ServletException {
         ServletContext context = getServletContext();
         String dossier = context.getInitParameter("package");
         String chemin = "WEB-INF/classes/"+dossier.replace('.', '/');
         String absoluteDossierPath = context.getRealPath(chemin);
+        
         File folder = new File(absoluteDossierPath);
+
+        // Vérification si le dossier existe et est un répertoire
+        if (!folder.exists() || !folder.isDirectory()) {
+            // throw new ServletException("Le chemin spécifié ne correspond pas à un dossier valide : " + absoluteDossierPath);
+            errorMessage = "Le chemin spécifié ne correspond pas à un dossier valide : " + absoluteDossierPath;
+        }
+
         File[] files = folder.listFiles();
+
+        // Vérification si le dossier est vide
+        if (files == null || files.length == 0) {
+            throw new ServletException("Le dossier spécifié est vide : " + absoluteDossierPath);
+        }
+
         if (files != null) {
             for (File file : files) {
                 if (file.getName().endsWith(".class")) {
@@ -39,13 +54,18 @@ public class FrontController extends HttpServlet {
                                     if (method.isAnnotationPresent(Get.class)) {
                                         // Obtenir l'annotation
                                         Get getAnnotation = method.getAnnotation(Get.class);
+                                        if (urlMapping.containsKey(getAnnotation.url())) {
+                                            // throw new ServletException("URL déjà mappée : " + getAnnotation.url());
+                                            errorMessage += "URL déjà mappée : " + getAnnotation.url();
+                                        }
                                         urlMapping.put(getAnnotation.url(), new Mapping(className,method.getName()));
                                     }
                                 }
                             }
                         }    
                     } catch (Exception e) {
-                        
+                        // throw new ServletException("Erreur lors du traitement de la classe : " + className, e);
+                        errorMessage += "Erreur lors du traitement de la classe : " + className;
                     }                    
                 }
             }
@@ -121,6 +141,9 @@ public class FrontController extends HttpServlet {
         }
         else{
             message += "Aucun Mapping associe";
+        }
+        if (errorMessage != null) {
+            message += "<p style='color:red;'>Erreur: " + errorMessage + "</p>";
         }
 
         // Utilisation de la variable pour afficher les classes annotées
