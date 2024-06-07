@@ -23,6 +23,9 @@ public class FrontController extends HttpServlet {
     public void init() throws ServletException {
         ServletContext context = getServletContext();
         String dossier = context.getInitParameter("package");
+        if (dossier == null) {
+            errorMessage += "Il n'y a pas de package defini dans web.xml";
+        }
         String chemin = "WEB-INF/classes/"+dossier.replace('.', '/');
         String absoluteDossierPath = context.getRealPath(chemin);
         
