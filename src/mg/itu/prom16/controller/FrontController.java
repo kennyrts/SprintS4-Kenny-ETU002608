@@ -87,6 +87,7 @@ public class FrontController extends HttpServlet {
     }
 
     protected void processRequest(HttpServletRequest request, HttpServletResponse response) throws Exception {
+        // System.out.println("Coucou");
         // Obtenir l'URI complète
         String uri = request.getRequestURI();
     
@@ -115,19 +116,30 @@ public class FrontController extends HttpServlet {
             Object instance = clazz.getDeclaredConstructor().newInstance();
             
             // Obtenir la méthode
-            Method method = clazz.getDeclaredMethod(mapping.getMethodName());
+            // Method method = clazz.getDeclaredMethod(mapping.getMethodName());
+            Method method = null;
+            for (Method fonction : clazz.getDeclaredMethods()) {
+                if (fonction.getName().equals(mapping.getMethodName())) {
+                    method = fonction;
+                }
+            }
             Parameter[] parameters = method.getParameters();
             Object[] parameterValues = new Object[parameters.length];
-            System.out.println("Parameters.length:"+parameters.length);
+            // System.out.println("Parameters.length:"+parameters.length);
             for (int i = 0; i < parameters.length; i++) {
                 Parameter parameter = parameters[i];
                 if (parameter.isAnnotationPresent(Param.class)) {
-                    System.out.println("Ouioui");
+                    // System.out.println("Ouioui");
                     Param paramAnnotation = parameter.getAnnotation(Param.class);
                     String paramName = paramAnnotation.name();
                     String paramValue = request.getParameter(paramName);
-                    System.out.println("paramName"+paramName);
-                    System.out.println("paramValue"+paramValue);
+                    // System.out.println("paramName"+paramName);
+                    // System.out.println("paramValue"+paramValue);
+                    parameterValues[i] = paramValue;
+                }else{
+                    // System.out.println("parametre:"+parameter.getName());
+                    String paramName = parameter.getName();
+                    String paramValue = request.getParameter(paramName);
                     parameterValues[i] = paramValue;
                 }
             }

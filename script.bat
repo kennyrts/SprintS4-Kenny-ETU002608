@@ -33,7 +33,7 @@ for %%I in ("%libDirectory%\*.jar") do (
 )
 
 rem Compiler tous les fichiers Java en une seule commande avec les bibliothèques nécessaires
-javac -cp "%classpath%" -d "%destinationDirectory%" !javaFiles!
+javac -parameters -cp "%classpath%" -d "%destinationDirectory%" !javaFiles!
 
 rem Creation du fichier jar
 echo Creation du jar
