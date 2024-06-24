@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.net.URL;
@@ -15,6 +16,8 @@ import javax.servlet.*;
 import javax.servlet.http.*;
 import mg.itu.prom16.util.Mapping;
 import mg.itu.prom16.util.ModelView;
+import mg.itu.prom16.annotations.FormField;
+import mg.itu.prom16.annotations.FormObject;
 import mg.itu.prom16.annotations.Get;
 import mg.itu.prom16.annotations.Param;
 
@@ -136,7 +139,23 @@ public class FrontController extends HttpServlet {
                     // System.out.println("paramName"+paramName);
                     // System.out.println("paramValue"+paramValue);
                     parameterValues[i] = paramValue;
-                }else{
+                }else if (parameter.isAnnotationPresent(FormObject.class)) {
+                        Object formObject = parameter.getType().getDeclaredConstructor().newInstance();
+                        for (Field field : formObject.getClass().getDeclaredFields()) {
+                        String fieldName = field.getName();
+                        if (field.isAnnotationPresent(FormField.class)) {
+                            FormField formField = field.getAnnotation(FormField.class);
+                            if (!formField.name().isEmpty()) {
+                                fieldName = formField.name();
+                            }
+                        }
+                        String paramValue = request.getParameter(fieldName);
+                        field.setAccessible(true);
+                        field.set(formObject, convertToFieldType(field, paramValue));
+                    }
+                    parameterValues[i] = formObject;
+                } 
+                else{
                     // System.out.println("parametre:"+parameter.getName());
                     String paramName = parameter.getName();
                     String paramValue = request.getParameter(paramName);
@@ -182,6 +201,22 @@ public class FrontController extends HttpServlet {
             out.println("</body>");
             out.println("</html>");
         }
+    }
+
+    private Object convertToFieldType(Field field, String paramValue) {
+        Class<?> fieldType = field.getType();
+        if (fieldType == int.class || fieldType == Integer.class) {
+            return Integer.parseInt(paramValue);
+        } else if (fieldType == long.class || fieldType == Long.class) {
+            return Long.parseLong(paramValue);
+        } else if (fieldType == float.class || fieldType == Float.class) {
+            return Float.parseFloat(paramValue);
+        } else if (fieldType == double.class || fieldType == Double.class) {
+            return Double.parseDouble(paramValue);
+        } else if (fieldType == boolean.class || fieldType == Boolean.class) {
+            return Boolean.parseBoolean(paramValue);
+        }
+        return paramValue;
     }
 
     private void handleError(HttpServletResponse response, String message) throws IOException {
