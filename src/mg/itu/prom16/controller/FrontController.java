@@ -16,6 +16,7 @@ import javax.servlet.*;
 import javax.servlet.http.*;
 import mg.itu.prom16.util.Mapping;
 import mg.itu.prom16.util.ModelView;
+import mg.itu.prom16.util.MySession;
 import mg.itu.prom16.annotations.FormField;
 import mg.itu.prom16.annotations.FormObject;
 import mg.itu.prom16.annotations.Get;
@@ -131,7 +132,9 @@ public class FrontController extends HttpServlet {
             // System.out.println("Parameters.length:"+parameters.length);
             for (int i = 0; i < parameters.length; i++) {
                 Parameter parameter = parameters[i];
-                if (parameter.isAnnotationPresent(Param.class)) {
+                if (parameter.getType().equals(MySession.class)) {                    
+                    parameterValues[i] = new MySession(request.getSession());
+                } else if (parameter.isAnnotationPresent(Param.class)) {
                     // System.out.println("Ouioui");
                     Param paramAnnotation = parameter.getAnnotation(Param.class);
                     String paramName = paramAnnotation.name();
