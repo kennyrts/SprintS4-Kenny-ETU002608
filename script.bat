@@ -4,6 +4,7 @@ setlocal EnableDelayedExpansion
 rem Définir le chemin d'accès au répertoire des sources et au répertoire de destination des fichiers compilés
 set "sourceDirectory=.\src"
 set "destinationDirectory=.\bin"
+set "outputJar=D:\ITU\L2\S4\Web dynamique\GitHub\test\lib\sprint.jar"
 
 rem Chemin vers le répertoire contenant les bibliothèques nécessaires
 set "libDirectory=.\lib"  
@@ -37,7 +38,7 @@ javac -parameters -cp "%classpath%" -d "%destinationDirectory%" !javaFiles!
 
 rem Creation du fichier jar
 echo Creation du jar
-jar cvf sprint.jar -C "%destinationDirectory%" .
+jar cvf "%outputJar%" -C "%destinationDirectory%" .
 echo Fichier jar cree avec succes : sprint.jar
 
 pause

@@ -21,6 +21,9 @@ import mg.itu.prom16.annotations.FormField;
 import mg.itu.prom16.annotations.FormObject;
 import mg.itu.prom16.annotations.Get;
 import mg.itu.prom16.annotations.Param;
+import mg.itu.prom16.annotations.Restapi;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 
 public class FrontController extends HttpServlet {
     HashMap<String,Mapping> urlMapping = new HashMap<>();
@@ -168,7 +171,18 @@ public class FrontController extends HttpServlet {
             // Exécuter la méthode et obtenir le résultat
             Object result = method.invoke(instance,parameterValues);
 
-            if (result instanceof String) {
+            if (method.isAnnotationPresent(Restapi.class)) {
+                response.setContentType("application/json;charset=UTF-8");
+                if (result instanceof ModelView) {
+                    // Si result est un ModelView, extraire les données et les convertir en JSON
+                    ModelView mv = (ModelView) result;
+                    HashMap<String, Object> data = mv.getData();
+                    writeJsonResponse(response, data);
+                } else {
+                    // Sinon, transformer directement result en JSON
+                    writeJsonResponse(response, result);
+                }
+            } else if (result instanceof String) {
                 // Si le résultat est une String, l'ajouter directement au message
                 message += "Resultat de la methode: " + result + "<br/>";
             } else if (result instanceof ModelView) {
@@ -242,4 +256,11 @@ public class FrontController extends HttpServlet {
                 .replace(".class", "");
         return className;
     }
+
+    private void writeJsonResponse(HttpServletResponse response, Object data) throws IOException {
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        try (PrintWriter writer = response.getWriter()) {
+            writer.write(gson.toJson(data));
+        }
+    }    
 }
