@@ -9,6 +9,15 @@ set "outputJar=D:\ITU\L2\S4\Web dynamique\GitHub\test\lib\sprint.jar"
 rem Chemin vers le répertoire contenant les bibliothèques nécessaires
 set "libDirectory=.\lib"  
 
+rem Nettoyage du contenu du répertoire de destination (sans supprimer le dossier)
+if exist "%destinationDirectory%" (
+    echo Nettoyage du contenu du dossier bin...
+    for /d %%D in ("%destinationDirectory%\*") do rd /s /q "%%D"
+    for %%F in ("%destinationDirectory%\*") do del /q "%%F"
+) else (
+    mkdir "%destinationDirectory%"
+)
+
 rem Initialiser la liste des fichiers Java à compiler
 set "javaFiles="
 rem Récupérer la liste de tous les fichiers Java dans les sous-dossiers de %sourceDirectory%
@@ -40,5 +49,7 @@ rem Creation du fichier jar
 echo Creation du jar
 jar cvf "%outputJar%" -C "%destinationDirectory%" .
 echo Fichier jar cree avec succes : sprint.jar
+
+rd /s /q "%destinationDirectory%"
 
 pause

@@ -7,11 +7,7 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
-import java.net.URL;
-import java.net.URLClassLoader;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import javax.servlet.*;
 import javax.servlet.http.*;
 import mg.itu.prom16.util.Mapping;
@@ -20,8 +16,11 @@ import mg.itu.prom16.util.MySession;
 import mg.itu.prom16.annotations.FormField;
 import mg.itu.prom16.annotations.FormObject;
 import mg.itu.prom16.annotations.Get;
+import mg.itu.prom16.annotations.Post;
 import mg.itu.prom16.annotations.Param;
 import mg.itu.prom16.annotations.Restapi;
+import mg.itu.prom16.annotations.Url;
+
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
@@ -50,11 +49,11 @@ public class FrontController extends HttpServlet {
                         for (Annotation annotation : cls.getAnnotations()) {
                             if (annotation.annotationType().getSimpleName().equals("Controller")) {
                                     for (Method method : cls.getDeclaredMethods()) {
-                                    // Vérifier si la méthode est annotée avec @Get
-                                    if (method.isAnnotationPresent(Get.class)) {
-                                        // Obtenir l'annotation
-                                        Get getAnnotation = method.getAnnotation(Get.class);
-                                        String url = getAnnotation.url();
+                                    // Vérifier si la méthode est annotée avec @Url
+                                    if (method.isAnnotationPresent(Url.class)) {
+                                        // Obtenir l'annotation                                        
+                                        Url urlAnnotation = method.getAnnotation(Url.class);
+                                        String url = urlAnnotation.value();
                                         if (urlMapping.containsKey(url)) {
                                             throw new ServletException("L'URL '" + url + "' est attachée à plusieurs fonctions.");
                                         }
@@ -94,7 +93,6 @@ public class FrontController extends HttpServlet {
     }
 
     protected void processRequest(HttpServletRequest request, HttpServletResponse response) throws Exception {
-        // System.out.println("Coucou");
         // Obtenir l'URI complète
         String uri = request.getRequestURI();
     
@@ -108,6 +106,7 @@ public class FrontController extends HttpServlet {
             handleError(response, "Aucun mapping trouvé pour l'URL : " + relativeUri);
             return;
         }
+
 
         String message = "URL : "+relativeUri+ "<br/>";
         message += "Mapping: <br>";
@@ -130,6 +129,26 @@ public class FrontController extends HttpServlet {
                     method = fonction;
                 }
             }
+
+            // Vérifier le type de requête HTTP et l'annotation de la méthode
+            String httpMethod = request.getMethod();
+            boolean isGet = method.isAnnotationPresent(Get.class);
+            boolean isPost = method.isAnnotationPresent(Post.class);
+            
+            if (!isGet && !isPost) {
+                isGet = true; // Par défaut, considérer comme GET
+            }
+
+            if (httpMethod.equals("GET") && !isGet) {
+                handleError(response, "Méthode non autorisée : L'URL " + relativeUri + " n'accepte que POST, mais GET a été utilisé.");
+                return;
+            }
+
+            if (httpMethod.equals("POST") && !isPost) {
+                handleError(response, "Méthode non autorisée : L'URL " + relativeUri + " n'accepte que GET, mais POST a été utilisé.");
+                return;
+            }
+
             Parameter[] parameters = method.getParameters();
             Object[] parameterValues = new Object[parameters.length];
             // System.out.println("Parameters.length:"+parameters.length);
@@ -138,12 +157,9 @@ public class FrontController extends HttpServlet {
                 if (parameter.getType().equals(MySession.class)) {                    
                     parameterValues[i] = new MySession(request.getSession());
                 } else if (parameter.isAnnotationPresent(Param.class)) {
-                    // System.out.println("Ouioui");
                     Param paramAnnotation = parameter.getAnnotation(Param.class);
                     String paramName = paramAnnotation.name();
                     String paramValue = request.getParameter(paramName);
-                    // System.out.println("paramName"+paramName);
-                    // System.out.println("paramValue"+paramValue);
                     parameterValues[i] = paramValue;
                 }else if (parameter.isAnnotationPresent(FormObject.class)) {
                         Object formObject = parameter.getType().getDeclaredConstructor().newInstance();
