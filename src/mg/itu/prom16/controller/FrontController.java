@@ -3,6 +3,7 @@ package mg.itu.prom16.controller;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.io.InputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -15,6 +16,8 @@ import mg.itu.prom16.util.HttpStatusException;
 import mg.itu.prom16.util.Mapping;
 import mg.itu.prom16.util.ModelView;
 import mg.itu.prom16.util.MySession;
+import mg.itu.prom16.util.UploadedFile;
+import mg.itu.prom16.annotations.FileUpload;
 import mg.itu.prom16.annotations.FormField;
 import mg.itu.prom16.annotations.FormObject;
 import mg.itu.prom16.annotations.Get;
@@ -148,6 +151,8 @@ public class FrontController extends HttpServlet {
                 Parameter[] parameters = method.getParameters();
                 Object[] parameterValues = new Object[parameters.length];
 
+                boolean isMultipart = request.getContentType() != null && request.getContentType().startsWith("multipart/form-data");
+
                 for (int i = 0; i < parameters.length; i++) {
                     Parameter parameter = parameters[i];
                     if (parameter.getType().equals(MySession.class)) {                    
@@ -157,7 +162,7 @@ public class FrontController extends HttpServlet {
                         String paramName = paramAnnotation.name();
                         String paramValue = request.getParameter(paramName);
                         parameterValues[i] = paramValue;
-                    }else if (parameter.isAnnotationPresent(FormObject.class)) {
+                    } else if (parameter.isAnnotationPresent(FormObject.class)) {
                             Object formObject = parameter.getType().getDeclaredConstructor().newInstance();
                             for (Field field : formObject.getClass().getDeclaredFields()) {
                             String fieldName = field.getName();
@@ -172,8 +177,34 @@ public class FrontController extends HttpServlet {
                             field.set(formObject, convertToFieldType(field, paramValue));
                         }
                         parameterValues[i] = formObject;
-                    } 
-                    else{                        
+                    } else if (parameter.getType().equals(UploadedFile.class)) {
+                        if (isMultipart) {
+                            // System.out.println("isMultipart");
+                            if (parameter.isAnnotationPresent(FileUpload.class)) {
+                                String paramName = parameter.getAnnotation(FileUpload.class).name();
+                                // String paramName = "file";
+                                // System.out.println("paramName : "+paramName);
+                                Part filePart = request.getPart(paramName); // Récupération de la partie fichier                                                        
+                    
+                                if (filePart != null) {
+                                    // System.out.println("filePart not null");
+                                    String fileName = extractFileName(filePart);
+                                    String contentType = filePart.getContentType();
+                                    long size = filePart.getSize();
+                                    InputStream inputStream = filePart.getInputStream();   
+                                                                
+                    
+                                    // Création de l'objet UploadedFile
+                                    parameterValues[i] = new UploadedFile(fileName, contentType, size, inputStream);
+                                } else {
+                                    // System.out.println("filePart null");
+                                    parameterValues[i] = null; // Pas de fichier associé
+                                }   
+                            }                            
+                        } else {
+                            parameterValues[i] = null; // Pas une requête multipart
+                        }
+                    } else{                        
                         String paramName = parameter.getName();
                         String paramValue = request.getParameter(paramName);
                         parameterValues[i] = paramValue;
@@ -214,8 +245,10 @@ public class FrontController extends HttpServlet {
             }            
         } catch (HttpStatusException e) {
             handleError(response, e.getStatusCode(), e.getMessage());
+            e.printStackTrace();
         } catch (Exception e) {
             handleError(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
+            e.printStackTrace();
         }   
     }
 
@@ -262,5 +295,15 @@ public class FrontController extends HttpServlet {
         try (PrintWriter writer = response.getWriter()) {
             writer.write(gson.toJson(data));
         }
-    }    
+    }
+    
+    private String extractFileName(Part part) {
+        String contentDisposition = part.getHeader("content-disposition");
+        for (String content : contentDisposition.split(";")) {
+            if (content.trim().startsWith("filename")) {
+                return content.substring(content.indexOf("=") + 2, content.length() - 1);
+            }
+        }
+        return null;
+    }
 }
