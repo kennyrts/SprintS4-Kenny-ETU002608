@@ -10,6 +10,8 @@ import java.lang.reflect.Parameter;
 import java.util.HashMap;
 import javax.servlet.*;
 import javax.servlet.http.*;
+
+import mg.itu.prom16.util.HttpStatusException;
 import mg.itu.prom16.util.Mapping;
 import mg.itu.prom16.util.ModelView;
 import mg.itu.prom16.util.MySession;
@@ -93,147 +95,128 @@ public class FrontController extends HttpServlet {
     }
 
     protected void processRequest(HttpServletRequest request, HttpServletResponse response) throws Exception {
-        // Obtenir l'URI complète
-        String uri = request.getRequestURI();
-    
-        // Obtenir le contexte de l'application
-        String contextPath = request.getContextPath();
+        try {
+            // Obtenir l'URI complète
+            String uri = request.getRequestURI();
         
-        // Extraire la partie de l'URI après le contexte
-        String relativeUri = uri.substring(contextPath.length() + 1);
-
-        if (!urlMapping.containsKey(relativeUri)) {
-            handleError(response, "Aucun mapping trouvé pour l'URL : " + relativeUri);
-            return;
-        }
-
-
-        String message = "URL : "+relativeUri+ "<br/>";
-        message += "Mapping: <br>";
-        if (urlMapping.containsKey(relativeUri)) {
-            Mapping mapping = urlMapping.get(relativeUri);
+            // Obtenir le contexte de l'application
+            String contextPath = request.getContextPath();
             
-            message += "Classe:"+mapping.getClassName()+ "<br/>";
-            message += "Methode:"+mapping.getMethodName()+ "<br/>";
-            // Charger la classe
-            Class<?> clazz = Class.forName(mapping.getClassName());
-            
-            // Créer une instance de la classe
-            Object instance = clazz.getDeclaredConstructor().newInstance();
-            
-            // Obtenir la méthode
-            // Method method = clazz.getDeclaredMethod(mapping.getMethodName());
-            Method method = null;
-            for (Method fonction : clazz.getDeclaredMethods()) {
-                if (fonction.getName().equals(mapping.getMethodName())) {
-                    method = fonction;
-                }
-            }
+            // Extraire la partie de l'URI après le contexte
+            String relativeUri = uri.substring(contextPath.length() + 1);
 
-            // Vérifier le type de requête HTTP et l'annotation de la méthode
-            String httpMethod = request.getMethod();
-            boolean isGet = method.isAnnotationPresent(Get.class);
-            boolean isPost = method.isAnnotationPresent(Post.class);
-            
-            if (!isGet && !isPost) {
-                isGet = true; // Par défaut, considérer comme GET
-            }
-
-            if (httpMethod.equals("GET") && !isGet) {
-                handleError(response, "Méthode non autorisée : L'URL " + relativeUri + " n'accepte que POST, mais GET a été utilisé.");
-                return;
-            }
-
-            if (httpMethod.equals("POST") && !isPost) {
-                handleError(response, "Méthode non autorisée : L'URL " + relativeUri + " n'accepte que GET, mais POST a été utilisé.");
-                return;
-            }
-
-            Parameter[] parameters = method.getParameters();
-            Object[] parameterValues = new Object[parameters.length];
-            // System.out.println("Parameters.length:"+parameters.length);
-            for (int i = 0; i < parameters.length; i++) {
-                Parameter parameter = parameters[i];
-                if (parameter.getType().equals(MySession.class)) {                    
-                    parameterValues[i] = new MySession(request.getSession());
-                } else if (parameter.isAnnotationPresent(Param.class)) {
-                    Param paramAnnotation = parameter.getAnnotation(Param.class);
-                    String paramName = paramAnnotation.name();
-                    String paramValue = request.getParameter(paramName);
-                    parameterValues[i] = paramValue;
-                }else if (parameter.isAnnotationPresent(FormObject.class)) {
-                        Object formObject = parameter.getType().getDeclaredConstructor().newInstance();
-                        for (Field field : formObject.getClass().getDeclaredFields()) {
-                        String fieldName = field.getName();
-                        if (field.isAnnotationPresent(FormField.class)) {
-                            FormField formField = field.getAnnotation(FormField.class);
-                            if (!formField.name().isEmpty()) {
-                                fieldName = formField.name();
-                            }
-                        }
-                        String paramValue = request.getParameter(fieldName);
-                        field.setAccessible(true);
-                        field.set(formObject, convertToFieldType(field, paramValue));
-                    }
-                    parameterValues[i] = formObject;
-                } 
-                else{
-                    // System.out.println("parametre:"+parameter.getName());
-                    String paramName = parameter.getName();
-                    String paramValue = request.getParameter(paramName);
-                    parameterValues[i] = paramValue;
-                }
-            }
-            // Exécuter la méthode et obtenir le résultat
-            Object result = method.invoke(instance,parameterValues);
-
-            if (method.isAnnotationPresent(Restapi.class)) {
-                response.setContentType("application/json;charset=UTF-8");
-                if (result instanceof ModelView) {
-                    // Si result est un ModelView, extraire les données et les convertir en JSON
-                    ModelView mv = (ModelView) result;
-                    HashMap<String, Object> data = mv.getData();
-                    writeJsonResponse(response, data);
-                } else {
-                    // Sinon, transformer directement result en JSON
-                    writeJsonResponse(response, result);
-                }
-            } else if (result instanceof String) {
-                // Si le résultat est une String, l'ajouter directement au message
-                message += "Resultat de la methode: " + result + "<br/>";
-            } else if (result instanceof ModelView) {
-                ModelView mv = (ModelView) result;
-                // Récupérer l'URL et dispatcher les données vers cet URL
-                String destinationUrl = mv.getUrl();
-                HashMap<String, Object> data = mv.getData();
-
-                for (String key : data.keySet()) {
-                    request.setAttribute(key, data.get(key));
-                }
-
-                RequestDispatcher dispatcher = request.getRequestDispatcher(destinationUrl);
-                dispatcher.forward(request, response);
-                return;
+            if (!urlMapping.containsKey(relativeUri)) {            
+                throw new HttpStatusException(HttpServletResponse.SC_NOT_FOUND, "Aucun mapping trouvé pour l'URL : " + relativeUri);
             } else {
-                handleError(response, "Type de retour non reconnu : " + result.getClass().getName());
-            }
-        }
-        else{
-            message += "Aucun Mapping associe";
-        }
+                Mapping mapping = urlMapping.get(relativeUri);
+                // Charger la classe
+                Class<?> clazz = Class.forName(mapping.getClassName());
+                
+                // Créer une instance de la classe
+                Object instance = clazz.getDeclaredConstructor().newInstance();
+                
+                // Obtenir la méthode
+                // Method method = clazz.getDeclaredMethod(mapping.getMethodName());
+                Method method = null;
+                for (Method fonction : clazz.getDeclaredMethods()) {
+                    if (fonction.getName().equals(mapping.getMethodName())) {
+                        method = fonction;
+                    }
+                }
 
-        // Utilisation de la variable pour afficher les classes annotées
-        response.setContentType("text/html;charset=UTF-8");
-        try (PrintWriter out = response.getWriter()) {
-            out.println("<html>");
-            out.println("<head>");
-            out.println("<title>Servlet FrontController</title>");            
-            out.println("</head>");
-            out.println("<body>");
-            out.println("<p>" + message + "</p>");
-            out.println("</body>");
-            out.println("</html>");
-        }
+                if (method == null) {
+                    throw new HttpStatusException(HttpServletResponse.SC_NOT_FOUND, "Méthode non trouvée : " + mapping.getMethodName());
+                }
+
+                // Vérifier le type de requête HTTP et l'annotation de la méthode
+                String httpMethod = request.getMethod();
+                boolean isGet = method.isAnnotationPresent(Get.class);
+                boolean isPost = method.isAnnotationPresent(Post.class);
+                
+                if (!isGet && !isPost) {
+                    isGet = true; // Par défaut, considérer comme GET
+                }
+
+                if (httpMethod.equals("GET") && !isGet) {
+                    throw new HttpStatusException(HttpServletResponse.SC_METHOD_NOT_ALLOWED, "L'URL " + relativeUri + " n'accepte que POST, mais GET a été utilisé.");
+                }
+
+                if (httpMethod.equals("POST") && !isPost) {
+                    throw new HttpStatusException(HttpServletResponse.SC_METHOD_NOT_ALLOWED, "L'URL " + relativeUri + " n'accepte que GET, mais POST a été utilisé.");
+                }
+
+                Parameter[] parameters = method.getParameters();
+                Object[] parameterValues = new Object[parameters.length];
+
+                for (int i = 0; i < parameters.length; i++) {
+                    Parameter parameter = parameters[i];
+                    if (parameter.getType().equals(MySession.class)) {                    
+                        parameterValues[i] = new MySession(request.getSession());
+                    } else if (parameter.isAnnotationPresent(Param.class)) {
+                        Param paramAnnotation = parameter.getAnnotation(Param.class);
+                        String paramName = paramAnnotation.name();
+                        String paramValue = request.getParameter(paramName);
+                        parameterValues[i] = paramValue;
+                    }else if (parameter.isAnnotationPresent(FormObject.class)) {
+                            Object formObject = parameter.getType().getDeclaredConstructor().newInstance();
+                            for (Field field : formObject.getClass().getDeclaredFields()) {
+                            String fieldName = field.getName();
+                            if (field.isAnnotationPresent(FormField.class)) {
+                                FormField formField = field.getAnnotation(FormField.class);
+                                if (!formField.name().isEmpty()) {
+                                    fieldName = formField.name();
+                                }
+                            }
+                            String paramValue = request.getParameter(fieldName);
+                            field.setAccessible(true);
+                            field.set(formObject, convertToFieldType(field, paramValue));
+                        }
+                        parameterValues[i] = formObject;
+                    } 
+                    else{                        
+                        String paramName = parameter.getName();
+                        String paramValue = request.getParameter(paramName);
+                        parameterValues[i] = paramValue;
+                    }
+                }
+                // Exécuter la méthode et obtenir le résultat
+                Object result = method.invoke(instance,parameterValues);
+
+                if (method.isAnnotationPresent(Restapi.class)) {
+                    response.setContentType("application/json;charset=UTF-8");
+                    if (result instanceof ModelView) {
+                        // Si result est un ModelView, extraire les données et les convertir en JSON
+                        ModelView mv = (ModelView) result;
+                        HashMap<String, Object> data = mv.getData();
+                        writeJsonResponse(response, data);
+                    } else {
+                        // Sinon, transformer directement result en JSON
+                        writeJsonResponse(response, result);
+                    }
+                } else if (result instanceof String) {
+                    // Si le résultat est une String, l'ajouter directement au message
+                    response.getWriter().write((String) result);
+                } else if (result instanceof ModelView) {
+                    ModelView mv = (ModelView) result;
+                    // Récupérer l'URL et dispatcher les données vers cet URL
+                    String destinationUrl = mv.getUrl();
+                    HashMap<String, Object> data = mv.getData();
+
+                    for (String key : data.keySet()) {
+                        request.setAttribute(key, data.get(key));
+                    }
+
+                    RequestDispatcher dispatcher = request.getRequestDispatcher(destinationUrl);
+                    dispatcher.forward(request, response);                    
+                } else {
+                    throw new HttpStatusException(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Type de retour non reconnu : " + result.getClass().getName());
+                }
+            }            
+        } catch (HttpStatusException e) {
+            handleError(response, e.getStatusCode(), e.getMessage());
+        } catch (Exception e) {
+            handleError(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
+        }   
     }
 
     private Object convertToFieldType(Field field, String paramValue) {
@@ -252,7 +235,8 @@ public class FrontController extends HttpServlet {
         return paramValue;
     }
 
-    private void handleError(HttpServletResponse response, String message) throws IOException {
+    private void handleError(HttpServletResponse response, int statusCode, String message) throws IOException {
+        response.setStatus(statusCode);
         response.setContentType("text/html;charset=UTF-8");
         try (PrintWriter out = response.getWriter()) {
             out.println("<html>");
@@ -260,7 +244,7 @@ public class FrontController extends HttpServlet {
             out.println("<title>Erreur</title>");
             out.println("</head>");
             out.println("<body>");
-            out.println("<p>" + message + "</p>");
+            out.println("<p>Erreur " + statusCode + " : " + message + "</p>");
             out.println("</body>");
             out.println("</html>");
         }
