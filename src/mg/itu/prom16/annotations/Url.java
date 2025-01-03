@@ -5,8 +5,11 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-// Définir l'annotation
-@Target(ElementType.METHOD) // L'annotation peut être appliquée aux méthodes
+/**
+ * Annotation permettant d'associer une URL à une méthode ou une classe.
+ */
+@Target({ElementType.METHOD, ElementType.TYPE}) // Peut être utilisée sur les classes et les méthodes
 @Retention(RetentionPolicy.RUNTIME) // L'annotation est disponible à l'exécution
-public @interface Get {
+public @interface Url {
+    String value(); // Définit l'URL associée
 }
