@@ -1,0 +1,57 @@
+for (int i = 0; i < parameters.length; i++) {
+Parameter parameter = parameters[i];
+if (parameter.getType().equals(MySession.class)) {                    
+    parameterValues[i] = new MySession(request.getSession());
+} else if (parameter.isAnnotationPresent(Param.class)) {
+    Param paramAnnotation = parameter.getAnnotation(Param.class);
+    String paramName = paramAnnotation.name();
+    String paramValue = request.getParameter(paramName);
+    parameterValues[i] = paramValue;
+} else if (parameter.isAnnotationPresent(FormObject.class)) {
+        Object formObject = parameter.getType().getDeclaredConstructor().newInstance();
+        for (Field field : formObject.getClass().getDeclaredFields()) {
+        String fieldName = field.getName();
+        if (field.isAnnotationPresent(FormField.class)) {
+            FormField formField = field.getAnnotation(FormField.class);
+            if (!formField.name().isEmpty()) {
+                fieldName = formField.name();
+            }
+        }
+        String paramValue = request.getParameter(fieldName);
+        field.setAccessible(true);
+        field.set(formObject, convertToFieldType(field, paramValue));
+    }
+    parameterValues[i] = formObject;
+} else if (parameter.getType().equals(UploadedFile.class)) {
+    if (isMultipart) {
+        // System.out.println("isMultipart");
+        if (parameter.isAnnotationPresent(FileUpload.class)) {
+            String paramName = parameter.getAnnotation(FileUpload.class).name();
+            // String paramName = "file";
+            // System.out.println("paramName : "+paramName);
+            Part filePart = request.getPart(paramName); // Récupération de la partie fichier                                                        
+
+            if (filePart != null) {
+                // System.out.println("filePart not null");
+                String fileName = extractFileName(filePart);
+                String contentType = filePart.getContentType();
+                long size = filePart.getSize();
+                InputStream inputStream = filePart.getInputStream();   
+                                            
+
+                // Création de l'objet UploadedFile
+                parameterValues[i] = new UploadedFile(fileName, contentType, size, inputStream);
+            } else {
+                // System.out.println("filePart null");
+                parameterValues[i] = null; // Pas de fichier associé
+            }   
+        }                            
+    } else {
+        parameterValues[i] = null; // Pas une requête multipart
+    }
+} else{                        
+    String paramName = parameter.getName();
+    String paramValue = request.getParameter(paramName);
+    parameterValues[i] = paramValue;
+}
+}

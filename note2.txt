@@ -1,3 +1,189 @@
+Je suis en train de creer mon propre framework pour une application web (tomcat) sur java
+Objectif : Creer differentes annotations pour la validation d'un formulaire
+Exemple :
+Imaginons que cette classe utilise mon framework, en mettant une annotation @Required username par exemple, FrontController throwera une exception si c'est null ou vide. Mettre plusieurs types de validations
+package model;
+
+import mg.itu.prom16.annotations.FormField;
+
+public class User {
+    @FormField(name = "username")
+    private String username;
+    
+    @FormField(name = "email")
+    private String email;
+    
+    @FormField(name = "age")
+    private int age;
+
+    // Getters and Setters
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public int getAge() {
+        return age;
+    }
+
+    public void setAge(int age) {
+        this.age = age;
+    }
+}
+
+
+Voila mon projet:
+
+Controller.java
+package mg.itu.prom16.annotations;
+
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+// Définition de l'annotation
+@Retention(RetentionPolicy.RUNTIME) // Annotation disponible au moment de l'exécution
+@Target(ElementType.TYPE) // Annotation applicable aux types (classes, interfaces, etc.)
+public @interface Controller {
+    
+}
+
+FormField.java
+package mg.itu.prom16.annotations;
+
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.FIELD)
+public @interface FormField {
+    String name() default "";
+}
+
+FormObject.java
+package mg.itu.prom16.annotations;
+
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.PARAMETER)
+public @interface FormObject {
+}
+
+Param.java
+package mg.itu.prom16.annotations;
+
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+// Définition de l'annotation
+@Retention(RetentionPolicy.RUNTIME) // Annotation disponible au moment de l'exécution
+@Target(ElementType.PARAMETER) // Annotation applicable aux paramètres de méthode
+public @interface Param {
+    String name();
+}
+
+ModelView.java
+package mg.itu.prom16.util;
+
+import java.util.HashMap;
+
+public class ModelView {
+    private String url;
+    private HashMap<String, Object> data;
+
+    // Constructeur par défaut
+    public ModelView() {
+        this.data = new HashMap<>();
+    }
+
+    // Constructeur avec l'URL
+    public ModelView(String url) {
+        this.url = url;
+        this.data = new HashMap<>();
+    }
+
+    // Getter pour l'URL
+    public String getUrl() {
+        return url;
+    }
+
+    // Setter pour l'URL
+    public void setUrl(String url) {
+        this.url = url;
+    }
+
+    // Getter pour les données
+    public HashMap<String, Object> getData() {
+        return data;
+    }
+
+    // Setter pour les données
+    public void setData(HashMap<String, Object> data) {
+        this.data = data;
+    }
+
+    // Méthode pour ajouter une donnée
+    public void addObject(String key, Object value) {
+        this.data.put(key, value);
+    }
+
+    // Méthode pour obtenir une donnée
+    public Object getObject(String key) {
+        return this.data.get(key);
+    }
+
+    // Méthode pour supprimer une donnée
+    public void removeObject(String key) {
+        this.data.remove(key);
+    }
+
+    public static void main(String[] args) {
+        // Exemple d'utilisation
+        ModelView mv = new ModelView("http://example.com");
+        mv.addObject("name", "John Doe");
+        mv.addObject("age", 30);
+
+        System.out.println("URL: " + mv.getUrl());
+        System.out.println("Données: " + mv.getData());
+    }
+}
+
+HttpStatusException.java
+package mg.itu.prom16.util;
+
+public class HttpStatusException extends Exception {
+    private final int statusCode;
+
+    public HttpStatusException(int statusCode, String message) {
+        super(message);
+        this.statusCode = statusCode;
+    }
+
+    public int getStatusCode() {
+        return statusCode;
+    }
+}
+
 package mg.itu.prom16.controller;
 
 import java.io.File;
@@ -25,10 +211,6 @@ import mg.itu.prom16.annotations.Post;
 import mg.itu.prom16.annotations.Param;
 import mg.itu.prom16.annotations.Restapi;
 import mg.itu.prom16.annotations.Url;
-import mg.itu.prom16.annotations.validation.Email;
-import mg.itu.prom16.annotations.validation.Max;
-import mg.itu.prom16.annotations.validation.Min;
-import mg.itu.prom16.annotations.validation.Required;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -180,7 +362,6 @@ public class FrontController extends HttpServlet {
                             field.setAccessible(true);
                             field.set(formObject, convertToFieldType(field, paramValue));
                         }
-                        validateFormObject(formObject);
                         parameterValues[i] = formObject;
                     } else if (parameter.getType().equals(UploadedFile.class)) {
                         if (isMultipart) {
@@ -310,52 +491,5 @@ public class FrontController extends HttpServlet {
             }
         }
         return null;
-    }
-
-    private void validateFormObject(Object formObject) throws HttpStatusException {
-        for (Field field : formObject.getClass().getDeclaredFields()) {
-            field.setAccessible(true);
-            try {
-                Object value = field.get(formObject);
-
-                // Check for @Required
-                if (field.isAnnotationPresent(Required.class)) {
-                    Required required = field.getAnnotation(Required.class);
-                    if (value == null || (value instanceof String && ((String) value).isEmpty())) {
-                        throw new HttpStatusException(HttpServletResponse.SC_BAD_REQUEST, required.message());
-                    }
-                }
-
-                // Check for @Email
-                if (field.isAnnotationPresent(Email.class)) {
-                    Email email = field.getAnnotation(Email.class);
-                    if (value instanceof String) {
-                        String emailStr = (String) value;
-                        if (!emailStr.matches("^[A-Za-z0-9+_.-]+@(.+)$")) {
-                            throw new HttpStatusException(HttpServletResponse.SC_BAD_REQUEST, email.message());
-                        }
-                    }
-                }
-
-                // Check for @Min
-                if (field.isAnnotationPresent(Min.class)) {
-                    Min min = field.getAnnotation(Min.class);
-                    if (value instanceof Integer && (Integer) value < min.value()) {
-                        throw new HttpStatusException(HttpServletResponse.SC_BAD_REQUEST, min.message());
-                    }
-                }
-
-                // Check for @Max
-                if (field.isAnnotationPresent(Max.class)) {
-                    Max max = field.getAnnotation(Max.class);
-                    if (value instanceof Integer && (Integer) value > max.value()) {
-                        throw new HttpStatusException(HttpServletResponse.SC_BAD_REQUEST, max.message());
-                    }
-                }
-
-            } catch (IllegalAccessException e) {
-                throw new HttpStatusException(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Validation error: " + e.getMessage());
-            }
-        }
     }
 }
