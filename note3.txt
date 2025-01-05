@@ -1,0 +1,32 @@
+// Exécuter la méthode et obtenir le résultat
+Object result = method.invoke(instance,parameterValues);
+
+if (method.isAnnotationPresent(Restapi.class)) {
+    response.setContentType("application/json;charset=UTF-8");
+    if (result instanceof ModelView) {
+        // Si result est un ModelView, extraire les données et les convertir en JSON
+        ModelView mv = (ModelView) result;
+        HashMap<String, Object> data = mv.getData();
+        writeJsonResponse(response, data);
+    } else {
+        // Sinon, transformer directement result en JSON
+        writeJsonResponse(response, result);
+    }
+} else if (result instanceof String) {
+    // Si le résultat est une String, l'ajouter directement au message
+    response.getWriter().write((String) result);
+} else if (result instanceof ModelView) {
+    ModelView mv = (ModelView) result;
+    // Récupérer l'URL et dispatcher les données vers cet URL
+    String destinationUrl = mv.getUrl();
+    HashMap<String, Object> data = mv.getData();
+
+    for (String key : data.keySet()) {
+        request.setAttribute(key, data.get(key));
+    }
+
+    RequestDispatcher dispatcher = request.getRequestDispatcher(destinationUrl);
+    dispatcher.forward(request, response);                    
+} else {
+    throw new HttpStatusException(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Type de retour non reconnu : " + result.getClass().getName());
+}
