@@ -9,10 +9,14 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.HashMap;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Map;
 import javax.servlet.*;
 import javax.servlet.http.*;
 
 import mg.itu.prom16.util.HttpStatusException;
+import mg.itu.prom16.util.FormException;
 import mg.itu.prom16.util.Mapping;
 import mg.itu.prom16.util.ModelView;
 import mg.itu.prom16.util.MySession;
@@ -35,6 +39,7 @@ import com.google.gson.GsonBuilder;
 
 public class FrontController extends HttpServlet {
     HashMap<String,Mapping> urlMapping = new HashMap<>();
+    private String lastUrl;
 
     public void init() throws ServletException {
         ServletContext context = getServletContext();
@@ -104,7 +109,7 @@ public class FrontController extends HttpServlet {
     protected void processRequest(HttpServletRequest request, HttpServletResponse response) throws Exception {
         try {
             // Obtenir l'URI complète
-            String uri = request.getRequestURI();
+            String uri = request.getRequestURI();            
         
             // Obtenir le contexte de l'application
             String contextPath = request.getContextPath();
@@ -122,8 +127,7 @@ public class FrontController extends HttpServlet {
                 // Créer une instance de la classe
                 Object instance = clazz.getDeclaredConstructor().newInstance();
                 
-                // Obtenir la méthode
-                // Method method = clazz.getDeclaredMethod(mapping.getMethodName());
+                // Obtenir la méthode                
                 Method method = null;
                 for (Method fonction : clazz.getDeclaredMethods()) {
                     if (fonction.getName().equals(mapping.getMethodName())) {
@@ -180,7 +184,32 @@ public class FrontController extends HttpServlet {
                             field.setAccessible(true);
                             field.set(formObject, convertToFieldType(field, paramValue));
                         }
-                        validateFormObject(formObject);
+                        try {
+                            validateFormObject(formObject);                           
+                        }
+                        catch (FormException e) {
+                            // Handle FormException
+                            String actionType = e.getActionType(); // Retrieve the action type
+                            System.out.println("Form URL: " + e.getFormUrl());
+                            System.out.println("Submitted Values: " + e.getSubmittedValues());
+                            System.out.println("Validation Errors:");
+                            for (Map.Entry<String, List<String>> entry : e.getErrors().entrySet()) {
+                                System.out.println("Field: " + entry.getKey() + " - Errors: " + String.join(", ", entry.getValue()));
+                            }
+
+                            // Forward the request to the form with errors and submitted values
+                            // request.setAttribute("errors", e.getErrors());
+                            // request.setAttribute("submittedValues", e.getSubmittedValues());
+                            
+                            // // Redirect based on action type
+                            // if ("POST".equalsIgnoreCase(actionType)) {
+                            //     RequestDispatcher dispatcher = request.getRequestDispatcher(e.getFormUrl());
+                            //     dispatcher.forward(request, response);
+                            // } else if ("GET".equalsIgnoreCase(actionType)) {
+                            //     // Handle GET request if needed
+                            //     response.sendRedirect(e.getFormUrl());
+                            // }
+                        }                        
                         parameterValues[i] = formObject;
                     } else if (parameter.getType().equals(UploadedFile.class)) {
                         if (isMultipart) {
@@ -215,6 +244,7 @@ public class FrontController extends HttpServlet {
                         parameterValues[i] = paramValue;
                     }
                 }
+                lastUrl = relativeUri;
                 // Exécuter la méthode et obtenir le résultat
                 Object result = method.invoke(instance,parameterValues);
 
@@ -312,17 +342,22 @@ public class FrontController extends HttpServlet {
         return null;
     }
 
-    private void validateFormObject(Object formObject) throws HttpStatusException {
+    private void validateFormObject(Object formObject) throws FormException, HttpStatusException {
+        HashMap<String, List<String>> errors = new HashMap<>();
+        HashMap<String, Object> submittedValues = new HashMap<>();
+
         for (Field field : formObject.getClass().getDeclaredFields()) {
             field.setAccessible(true);
             try {
                 Object value = field.get(formObject);
+                submittedValues.put(field.getName(), value); // Store the submitted value
+                List<String> fieldErrors = new ArrayList<>();
 
                 // Check for @Required
                 if (field.isAnnotationPresent(Required.class)) {
                     Required required = field.getAnnotation(Required.class);
                     if (value == null || (value instanceof String && ((String) value).isEmpty())) {
-                        throw new HttpStatusException(HttpServletResponse.SC_BAD_REQUEST, required.message());
+                        fieldErrors.add(required.message());
                     }
                 }
 
@@ -332,7 +367,7 @@ public class FrontController extends HttpServlet {
                     if (value instanceof String) {
                         String emailStr = (String) value;
                         if (!emailStr.matches("^[A-Za-z0-9+_.-]+@(.+)$")) {
-                            throw new HttpStatusException(HttpServletResponse.SC_BAD_REQUEST, email.message());
+                            fieldErrors.add(email.message());
                         }
                     }
                 }
@@ -341,7 +376,7 @@ public class FrontController extends HttpServlet {
                 if (field.isAnnotationPresent(Min.class)) {
                     Min min = field.getAnnotation(Min.class);
                     if (value instanceof Integer && (Integer) value < min.value()) {
-                        throw new HttpStatusException(HttpServletResponse.SC_BAD_REQUEST, min.message());
+                        fieldErrors.add(min.message());
                     }
                 }
 
@@ -349,13 +384,24 @@ public class FrontController extends HttpServlet {
                 if (field.isAnnotationPresent(Max.class)) {
                     Max max = field.getAnnotation(Max.class);
                     if (value instanceof Integer && (Integer) value > max.value()) {
-                        throw new HttpStatusException(HttpServletResponse.SC_BAD_REQUEST, max.message());
+                        fieldErrors.add(max.message());
                     }
+                }
+
+                // If there are errors for this field, add them to the map
+                if (!fieldErrors.isEmpty()) {
+                    errors.put(field.getName(), fieldErrors);
                 }
 
             } catch (IllegalAccessException e) {
                 throw new HttpStatusException(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Validation error: " + e.getMessage());
             }
+        }
+
+        // If there are validation errors, throw FormException
+        if (!errors.isEmpty()) {
+            String actionType = "GET"; // Determine the action type (you can modify this logic as needed)
+            throw new FormException(lastUrl, actionType, errors, submittedValues);
         }
     }
 }
