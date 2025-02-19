@@ -125,6 +125,33 @@ public class FrontController extends HttpServlet {
                 // Charger la classe
                 Class<?> clazz = Class.forName(mapping.getClassName());
                 
+                // Check for @Auth annotation at the class level
+                String requiredRole = null;
+                if (clazz.isAnnotationPresent(Auth.class)) {
+                    Auth classAuthAnnotation = clazz.getAnnotation(Auth.class);
+                    requiredRole = classAuthAnnotation.value();
+                    
+                    // Get the role from the session using the context parameter
+                    String sessionRoleParam = getServletContext().getInitParameter("session-role");
+                    HttpSession session = request.getSession();
+                    String userRole = (String) session.getAttribute(sessionRoleParam); // Use the parameter from web.xml
+
+                    // Check if the user has the required role
+                    if (requiredRole.isEmpty()) {
+                        // If the required role is empty, allow access if userRole is not null or empty
+                        if (userRole != null && !userRole.isEmpty()) {
+                            // Access granted
+                        } else {
+                            throw new HttpStatusException(HttpServletResponse.SC_FORBIDDEN, "Access denied: insufficient permissions.");
+                        }
+                    } else {
+                        // If a specific role is required, check against it
+                        if (userRole == null || !userRole.equals(requiredRole)) {
+                            throw new HttpStatusException(HttpServletResponse.SC_FORBIDDEN, "Access denied: insufficient permissions.");
+                        }
+                    }
+                }
+
                 // Créer une instance de la classe
                 Object instance = clazz.getDeclaredConstructor().newInstance();
                 
@@ -160,7 +187,7 @@ public class FrontController extends HttpServlet {
                 // Check for @Auth annotation
                 if (method.isAnnotationPresent(Auth.class)) {
                     Auth authAnnotation = method.getAnnotation(Auth.class);
-                    String requiredRole = authAnnotation.value();
+                    requiredRole = authAnnotation.value();
                     
                     // Get the role from the session using the context parameter
                     String sessionRoleParam = getServletContext().getInitParameter("session-role");
