@@ -33,6 +33,7 @@ import mg.itu.prom16.annotations.validation.Email;
 import mg.itu.prom16.annotations.validation.Max;
 import mg.itu.prom16.annotations.validation.Min;
 import mg.itu.prom16.annotations.validation.Required;
+import mg.itu.prom16.annotations.Auth;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -154,6 +155,32 @@ public class FrontController extends HttpServlet {
 
                 if (httpMethod.equals("POST") && !isPost) {
                     throw new HttpStatusException(HttpServletResponse.SC_METHOD_NOT_ALLOWED, "L'URL " + relativeUri + " n'accepte que GET, mais POST a été utilisé.");
+                }
+
+                // Check for @Auth annotation
+                if (method.isAnnotationPresent(Auth.class)) {
+                    Auth authAnnotation = method.getAnnotation(Auth.class);
+                    String requiredRole = authAnnotation.value();
+                    
+                    // Get the role from the session using the context parameter
+                    String sessionRoleParam = getServletContext().getInitParameter("session-role");
+                    HttpSession session = request.getSession();
+                    String userRole = (String) session.getAttribute(sessionRoleParam); // Use the parameter from web.xml
+
+                    // Check if the user has the required role
+                    if (requiredRole.isEmpty()) {
+                        // If the required role is empty, allow access if userRole is not null or empty
+                        if (userRole != null && !userRole.isEmpty()) {
+                            // Access granted
+                        } else {
+                            throw new HttpStatusException(HttpServletResponse.SC_FORBIDDEN, "Access denied: insufficient permissions.");
+                        }
+                    } else {
+                        // If a specific role is required, check against it
+                        if (userRole == null || !userRole.equals(requiredRole)) {
+                            throw new HttpStatusException(HttpServletResponse.SC_FORBIDDEN, "Access denied: insufficient permissions.");
+                        }
+                    }
                 }
 
                 Parameter[] parameters = method.getParameters();
