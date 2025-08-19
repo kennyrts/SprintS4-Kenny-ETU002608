@@ -12,8 +12,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
-import javax.servlet.*;
-import javax.servlet.http.*;
+import jakarta.servlet.*;
+import jakarta.servlet.http.*;
 
 import mg.itu.prom16.util.HttpStatusException;
 import mg.itu.prom16.util.FormException;
@@ -34,6 +34,8 @@ import mg.itu.prom16.annotations.validation.Max;
 import mg.itu.prom16.annotations.validation.Min;
 import mg.itu.prom16.annotations.validation.Required;
 import mg.itu.prom16.annotations.Auth;
+import mg.itu.prom16.annotations.PdfExport;
+import mg.itu.prom16.util.PdfGenerator;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -170,19 +172,21 @@ public class FrontController extends HttpServlet {
                 // Vérifier le type de requête HTTP et l'annotation de la méthode
                 String httpMethod = request.getMethod();
                 boolean isGet = method.isAnnotationPresent(Get.class);
+                // System.out.println("isGet : "+isGet);
                 boolean isPost = method.isAnnotationPresent(Post.class);
-                
+                // System.out.println("isPost : "+isPost);
+                // System.out.println("httpMethod : "+httpMethod);
                 if (!isGet && !isPost) {
                     isGet = true; // Par défaut, considérer comme GET
                 }
 
-                if (httpMethod.equals("GET") && !isGet) {
-                    throw new HttpStatusException(HttpServletResponse.SC_METHOD_NOT_ALLOWED, "L'URL " + relativeUri + " n'accepte que POST, mais GET a été utilisé.");
-                }
+                // if (httpMethod.equals("GET") && !isGet) {
+                //     throw new HttpStatusException(HttpServletResponse.SC_METHOD_NOT_ALLOWED, "L'URL " + relativeUri + " n'accepte que POST, mais GET a ete utilise.");
+                // }
 
-                if (httpMethod.equals("POST") && !isPost) {
-                    throw new HttpStatusException(HttpServletResponse.SC_METHOD_NOT_ALLOWED, "L'URL " + relativeUri + " n'accepte que GET, mais POST a été utilisé.");
-                }
+                // if (httpMethod.equals("POST") && !isPost) {                    
+                //     throw new HttpStatusException(HttpServletResponse.SC_METHOD_NOT_ALLOWED, "L'URL " + relativeUri + " n'accepte que GET, mais POST a ete utilise.");
+                // }
 
                 // Check for @Auth annotation
                 if (method.isAnnotationPresent(Auth.class)) {
@@ -242,27 +246,22 @@ public class FrontController extends HttpServlet {
                             validateFormObject(formObject);                           
                         }
                         catch (FormException e) {
-                            // Handle FormException
-                            String actionType = e.getActionType(); // Retrieve the action type
+                            // Handle FormException                            
                             System.out.println("Form URL: " + e.getFormUrl());
                             System.out.println("Submitted Values: " + e.getSubmittedValues());
                             System.out.println("Validation Errors:");
                             for (Map.Entry<String, List<String>> entry : e.getErrors().entrySet()) {
                                 System.out.println("Field: " + entry.getKey() + " - Errors: " + String.join(", ", entry.getValue()));
                             }
-
-                            // Forward the request to the form with errors and submitted values
-                            // request.setAttribute("errors", e.getErrors());
-                            // request.setAttribute("submittedValues", e.getSubmittedValues());
+                            // Add errors and submitted values to request attributes
+                            request.setAttribute("errors", e.getErrors());
+                            request.setAttribute("submittedValues", e.getSubmittedValues());
+                            request.setAttribute("error", "Please correct the form errors");                                                        
                             
-                            // // Redirect based on action type
-                            // if ("POST".equalsIgnoreCase(actionType)) {
-                            //     RequestDispatcher dispatcher = request.getRequestDispatcher(e.getFormUrl());
-                            //     dispatcher.forward(request, response);
-                            // } else if ("GET".equalsIgnoreCase(actionType)) {
-                            //     // Handle GET request if needed
-                            //     response.sendRedirect(e.getFormUrl());
-                            // }
+                            // Forward back to the form
+                            RequestDispatcher dispatcher = request.getRequestDispatcher(e.getFormUrl());
+                            dispatcher.forward(request, response);
+                            return;
                         }                        
                         parameterValues[i] = formObject;
                     } else if (parameter.getType().equals(UploadedFile.class)) {
@@ -302,7 +301,34 @@ public class FrontController extends HttpServlet {
                 // Exécuter la méthode et obtenir le résultat
                 Object result = method.invoke(instance,parameterValues);
 
-                if (method.isAnnotationPresent(Restapi.class)) {
+                if (method.isAnnotationPresent(PdfExport.class)) {
+                    // Handle PDF export
+                    PdfExport pdfAnnotation = method.getAnnotation(PdfExport.class);
+                    
+                    if (result instanceof ModelView) {
+                        ModelView mv = (ModelView) result;
+                        
+                        // Generate PDF
+                        String title = pdfAnnotation.title().isEmpty() ? "Export PDF" : pdfAnnotation.title();
+                        byte[] pdfBytes = PdfGenerator.generatePdf(mv, title);
+                        
+                        // Set response headers
+                        response.setContentType("application/pdf");
+                        String filename = pdfAnnotation.filename().isEmpty() ? "export.pdf" : pdfAnnotation.filename() + ".pdf";
+                        
+                        if (pdfAnnotation.forceDownload()) {
+                            response.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+                        } else {
+                            response.setHeader("Content-Disposition", "inline; filename=\"" + filename + "\"");
+                        }
+                        
+                        response.setContentLength(pdfBytes.length);
+                        response.getOutputStream().write(pdfBytes);
+                        response.getOutputStream().flush();
+                    } else {
+                        throw new HttpStatusException(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "PDF export requires ModelView return type");
+                    }
+                } else if (method.isAnnotationPresent(Restapi.class)) {
                     response.setContentType("application/json;charset=UTF-8");
                     if (result instanceof ModelView) {
                         // Si result est un ModelView, extraire les données et les convertir en JSON
@@ -343,16 +369,40 @@ public class FrontController extends HttpServlet {
 
     private Object convertToFieldType(Field field, String paramValue) {
         Class<?> fieldType = field.getType();
-        if (fieldType == int.class || fieldType == Integer.class) {
-            return Integer.parseInt(paramValue);
-        } else if (fieldType == long.class || fieldType == Long.class) {
-            return Long.parseLong(paramValue);
-        } else if (fieldType == float.class || fieldType == Float.class) {
-            return Float.parseFloat(paramValue);
-        } else if (fieldType == double.class || fieldType == Double.class) {
-            return Double.parseDouble(paramValue);
-        } else if (fieldType == boolean.class || fieldType == Boolean.class) {
-            return Boolean.parseBoolean(paramValue);
+        try {            
+            if (paramValue == null || paramValue.trim().isEmpty()) {
+                if (fieldType == int.class) return 0;
+                if (fieldType == long.class) return 0L;
+                if (fieldType == float.class) return 0.0f;
+                if (fieldType == double.class) return 0.0d;
+                if (fieldType == boolean.class) return false;
+                return null;
+            }
+            if (fieldType == int.class || fieldType == Integer.class) {
+                return Integer.parseInt(paramValue);
+            } else if (fieldType == long.class || fieldType == Long.class) {
+                return Long.parseLong(paramValue);
+            } else if (fieldType == float.class || fieldType == Float.class) {
+                return Float.parseFloat(paramValue);
+            } else if (fieldType == double.class || fieldType == Double.class) {
+                return Double.parseDouble(paramValue);
+            } else if (fieldType == boolean.class || fieldType == Boolean.class) {
+                return Boolean.parseBoolean(paramValue);
+            } else if (fieldType == java.sql.Timestamp.class) {
+                if (paramValue.contains("T")) {
+                    // Handle HTML datetime-local format (yyyy-MM-ddThh:mm)
+                    return java.sql.Timestamp.valueOf(paramValue.replace("T", " ") + ":00");
+                }
+                return java.sql.Timestamp.valueOf(paramValue);
+            }   
+        } catch (Exception e) {
+            System.out.println(field.getName() + " : "+paramValue);
+            // Return default values for primitive types on error
+            if (fieldType == int.class) return 0;
+            if (fieldType == long.class) return 0L;
+            if (fieldType == float.class) return 0.0f;
+            if (fieldType == double.class) return 0.0d;
+            if (fieldType == boolean.class) return false;
         }
         return paramValue;
     }
@@ -429,9 +479,9 @@ public class FrontController extends HttpServlet {
                 // Check for @Min
                 if (field.isAnnotationPresent(Min.class)) {
                     Min min = field.getAnnotation(Min.class);
-                    if (value instanceof Integer && (Integer) value < min.value()) {
+                    if (value instanceof Integer && (Integer) value < min.value()) {                        
                         fieldErrors.add(min.message());
-                    }
+                    }                    
                 }
 
                 // Check for @Max

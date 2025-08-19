@@ -4,7 +4,7 @@ setlocal EnableDelayedExpansion
 rem Définir le chemin d'accès au répertoire des sources et au répertoire de destination des fichiers compilés
 set "sourceDirectory=.\src"
 set "destinationDirectory=.\bin"
-set "outputJar=D:\ITU\L2\S4\Web dynamique\GitHub\test\lib\sprint.jar"
+set "outputJar=C:\Users\Kenny\Documents\GitHub\Ticketing\wildfly\lib\sprint.jar"
 
 rem Chemin vers le répertoire contenant les bibliothèques nécessaires
 set "libDirectory=.\lib"  
