@@ -35,7 +35,9 @@ import mg.itu.prom16.annotations.validation.Min;
 import mg.itu.prom16.annotations.validation.Required;
 import mg.itu.prom16.annotations.Auth;
 import mg.itu.prom16.annotations.PdfExport;
+import mg.itu.prom16.annotations.CsvExport;
 import mg.itu.prom16.util.PdfGenerator;
+import mg.itu.prom16.util.CsvGenerator;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -327,6 +329,34 @@ public class FrontController extends HttpServlet {
                         response.getOutputStream().flush();
                     } else {
                         throw new HttpStatusException(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "PDF export requires ModelView return type");
+                    }
+                } else if (method.isAnnotationPresent(CsvExport.class)) {
+                    // Handle CSV export
+                    CsvExport csvAnnotation = method.getAnnotation(CsvExport.class);
+                    
+                    if (result instanceof ModelView) {
+                        ModelView mv = (ModelView) result;
+                        
+                        // Generate CSV
+                        boolean includeHeaders = csvAnnotation.includeHeaders();
+                        String delimiter = csvAnnotation.delimiter();
+                        byte[] csvBytes = CsvGenerator.generateCsv(mv, includeHeaders, delimiter);
+                        
+                        // Set response headers
+                        response.setContentType("text/csv;charset=UTF-8");
+                        String filename = csvAnnotation.filename().isEmpty() ? "export.csv" : csvAnnotation.filename() + ".csv";
+                        
+                        if (csvAnnotation.forceDownload()) {
+                            response.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+                        } else {
+                            response.setHeader("Content-Disposition", "inline; filename=\"" + filename + "\"");
+                        }
+                        
+                        response.setContentLength(csvBytes.length);
+                        response.getOutputStream().write(csvBytes);
+                        response.getOutputStream().flush();
+                    } else {
+                        throw new HttpStatusException(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "CSV export requires ModelView return type");
                     }
                 } else if (method.isAnnotationPresent(Restapi.class)) {
                     response.setContentType("application/json;charset=UTF-8");
